@@ -1,0 +1,2031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMEM-Sim Generator</title>
+</head>
+<body>
+
+<h1>LMEM-Sim Generator</h1>
+
+<form action="" id="param-form">
+    <label>Project name
+        <input type="text" name="project-name">
+    </label>
+    <br>
+    <label>Dependent variable name
+        <input type="text" name="dep-var-name">
+    </label>
+    <br>
+    <label>Intercept (grand mean)
+        <input type="number" step="0.0001" name="intercept" value="0">
+    </label>
+    <br>
+    <label>Residual (error) sd
+        <input type="number" step="0.0001" name="residual" value="0">
+    </label>
+    <br>
+
+    <label>Number of fixed factors
+        <input type="number" name="number-of-fixed-factors" id="number-of-fixed-factors" value="0">
+    </label>
+    <br>
+
+    <label>Number of random factors
+        <input type="number" name="number-of-random-factors" id="number-of-random-factors" value="0">
+    </label>
+    <br>
+
+    <h2>Fixed factors</h2>
+    <div id="fixed-factors-fieldsets-div"></div>
+
+    <div id="interactions-fieldset-div"></div>
+
+    <h2>Random factors</h2>
+    <div id="random-factors-fieldsets-div"></div>
+    <br>
+
+    <label>
+        <input type="checkbox" checked="true" name="maximal-model" id="maximal-model-checkbox">
+        Maximal model
+    </label>
+    <br>
+    <label id="model-textarea-label" hidden>Formula of linear mixed model:
+        <br>
+        <textarea value="model-textarea" id="model-textarea" cols="150" rows="5"></textarea>
+    </label>
+    <br>
+    <br>
+
+    <label>Seed (ensure the script returns the same results on each run)
+        <input type="number" name="seed" value="1111">
+    </label>
+    <br>
+    <br>
+
+</form>
+<br>
+
+<button id="download-json-btn">Download parameters as JSON file</button>
+<br>
+<label>Load parameters from JSON file
+    <input name="load-json-input" type="file" id="load-json-input" value="Load parameters from JSON file">
+</label>
+
+<div>
+    <p>Set DeBruine & Barr example parameters</p>
+    <button id="example-params-2wb">2wb Design</button>
+    <button id="example-params-2ww2wb">2ww2wb Design</button>
+</div>
+<br>
+
+<input type="submit" value="Generate code" form="param-form">
+<button id="copy-btn">Copy to clipboard</button>
+<button id="download-btn">Download as R file</button>
+<br>
+<textarea id="code-textarea" cols="150" rows="200"></textarea>
+
+<script>
+
+document.addEventListener('DOMContentLoaded', () => {
+
+    let interactionSign = '-x-';
+    let LevelsIds = ['lev1', 'lev2']; // Assumes all fixed factors have only two levels
+
+    let defaultParams = {
+        projectName: 'lmem-sim',
+        depVarName: 'Y',
+        intercept: 0,
+        residualSd: 0,
+        numberOfVariables: {
+            fixedFactors: 2,
+            randomFactors: 2
+        },
+        fixedFactors: {
+            ff1: {
+                id: 'ff1',
+                name: '',
+                levels: {
+                    lev1: { id:'lev1', name: '' },
+                    lev2: { id:'lev2', name: '' }
+                },
+                mainEffect: 0
+            },
+            ff2: {
+                id: 'ff2',
+                name: '',
+                levels: {
+                    lev1: { id:'lev1', name: '' },
+                    lev2: { id:'lev2', name: '' }
+                },
+                mainEffect: 0
+            }
+        },
+        interactions: {
+            ff1XFf2: 0
+        },
+        randomFactors: {
+            rf1: {
+                id: 'rf1',
+                name: 'Subjects',
+                fixedFactors: {
+                    between: [
+                    ],
+                    within: [
+                        'ff1', 'ff2'
+                    ]
+                },
+                n: 0,
+                interceptSd: 0,
+                slopeSd: {
+                        ff1: 0,
+                        ff2: 0,
+                        ff1XFf2: 0
+                    },
+                corr: {
+                    intercept: {
+                        ff1: 0, ff2: 0, ff1XFf2: 0
+                    },
+                    ff1: {
+                        ff2: 0, ff1XFf2: 0
+                    },
+                    ff2: {
+                        ff1XFf2: 0
+                    },
+                },
+                nByBetweenVarsLevels : {}
+            },
+            rf2: {
+                id: 'rf2',
+                name: 'Items',
+                fixedFactors: {
+                    between: [
+                        'ff2'
+                    ],
+                    within: [
+                        'ff1'
+                    ]
+                },
+                interceptSd: 0,
+                slopeSd: {
+                    ff1: 0,
+                },
+                corr: {
+                },
+                nByBetweenVarsLevels : {
+                }
+            }
+        },
+        seed: 1111,
+        userModel: ''
+    }
+
+    let exampleParams2ww2wb = {
+        projectName: 'example 2ww2wb',
+        depVarName: 'RT',
+        intercept: 800,
+        residualSd: 200,
+        numberOfVariables: {
+            fixedFactors: 2,
+            randomFactors: 2
+        },
+        fixedFactors: {
+            ff1: {
+                id: 'ff1',
+                name: 'expression',
+                levels: {
+                    lev1: { id:'lev1', name: 'happy' },
+                    lev2: { id:'lev2', name: 'angry' }
+                },
+                mainEffect: 0
+            },
+            ff2: {
+                id: 'ff2',
+                name: 'category',
+                levels: {
+                    lev1: { id:'lev1', name: 'ingroup' },
+                    lev2: { id:'lev2', name: 'outgroup' },
+                },
+                mainEffect: 50
+            }
+        },
+        interactions: {
+            ff1XFf2: 70
+        },
+        randomFactors: {
+            rf1: {
+                id: 'rf1',
+                name: 'Subjects',
+                fixedFactors: {
+                    between: [
+                    ],
+                    within: [
+                        'ff1', 'ff2'
+                    ]
+                },
+                n: 50,
+                interceptSd: 100,
+                slopeSd: {
+                    ff1: 40,
+                    ff2: 80,
+                    ff1XFf2: 80
+                },
+                corr: {
+                    intercept: {
+                        ff1: .3, ff2: .3, ff1XFf2: .3
+                    },
+                    ff1: {
+                        ff2: .1, ff1XFf2: .1
+                    },
+                    ff2: {
+                        ff1XFf2: .1
+                    },
+                },
+                nByBetweenVarsLevels : {
+                }
+            },
+            rf2: {
+                id: 'rf2',
+                name: 'Items',
+                fixedFactors: {
+                    between: [
+                        'ff2'
+                    ],
+                    within: [
+                        'ff1'
+                    ]
+                },
+                interceptSd: 80,
+                slopeSd: {
+                    ff1: 60,
+                },
+                corr: {
+                    intercept: {
+                        ff1: .2
+                    },
+                },
+                nByBetweenVarsLevels : {
+                    ff2: {
+                        lev1: 25,
+                        lev2: 25
+                    }
+                }
+            }
+        },
+        seed: 90210,
+        userModel: ''
+    }
+
+    let exampleParams2wb = {
+        projectName: 'example 2wb',
+        depVarName: 'RT',
+        intercept: 800,
+        residualSd: 200,
+        numberOfVariables: {
+            fixedFactors: 1,
+            randomFactors: 2
+        },
+        fixedFactors: {
+            ff1: {
+                id: 'ff1',
+                name: 'category',
+                levels: {
+                    lev1: { id:'lev1', name: 'ingroup' },
+                    lev2: { id:'lev2', name: 'outgroup' },
+                },
+                mainEffect: 50
+            }
+        },
+        interactions: {
+        },
+        randomFactors: {
+            rf1: {
+                id: 'rf1',
+                name: 'Subjects',
+                fixedFactors: {
+                    between: [
+                    ],
+                    within: [
+                        'ff1'
+                    ]
+                },
+                n: 100,
+                interceptSd: 100,
+                slopeSd: {
+                    ff1: 40,
+                },
+                corr: {
+                    intercept: {
+                        ff1: .2
+                    },
+                },
+                nByBetweenVarsLevels : {
+                }
+            },
+            rf2: {
+                id: 'rf2',
+                name: 'Items',
+                fixedFactors: {
+                    between: [
+                        'ff1'
+                    ],
+                    within: [
+                    ]
+                },
+                interceptSd: 80,
+                slopeSd: {
+                },
+                corr: {
+                },
+                nByBetweenVarsLevels : {
+                    ff1: {
+                        lev1: 25,
+                        lev2: 25
+                    }
+                }
+            }
+        },
+        seed: 8675309,
+        userModel: ''
+    }
+
+    let currentParams = {};
+
+    let form = document.getElementById('param-form');
+    let numberOfFixedFactorsInput = document.getElementById('number-of-fixed-factors');
+    let numberOfRandomFactorsInput = document.getElementById('number-of-random-factors');
+
+    let maximalModelCheckbox = document.getElementById('maximal-model-checkbox');
+    let modelTextareaLabel = document.getElementById('model-textarea-label');
+
+    let downloadJSONBtn = document.getElementById('download-json-btn');
+    let loadJSONInput = document.getElementById('load-json-input');
+
+    let example2wbBtn = document.getElementById('example-params-2wb');
+    let example2ww2wbBtn = document.getElementById('example-params-2ww2wb');
+    let copyBtn = document.getElementById('copy-btn');
+    let downloadBtn = document.getElementById('download-btn');
+    let codeTextarea = document.getElementById('code-textarea');
+
+    let fixedFactorsFieldsetDiv = document.getElementById('fixed-factors-fieldsets-div');
+    let interactionFieldsetDiv = document.getElementById('interactions-fieldset-div');
+    let randomFactorsFieldsetDiv = document.getElementById('random-factors-fieldsets-div');
+
+    setMaximalModelCheckbox(form, true);
+    updateFormHTML(exampleParams2ww2wb);
+    updateFormValues(exampleParams2ww2wb);
+    updateParams(currentParams, form);
+
+    maximalModelCheckbox.addEventListener('change', e => {
+        updateFormHTML(currentParams);
+        updateFormValues(currentParams);
+        updateParams(currentParams, form);
+    });
+
+
+    numberOfFixedFactorsInput.addEventListener('change', e => {
+        updateNumberOfVariables(currentParams, form);
+
+        let fixedFactorsIds = generateIdsForForm(getNumberOfFixedFactors(currentParams), 'ff');
+
+        deleteOldVars(currentParams, fixedFactorsIds, getFixedFactorsIds(currentParams));
+
+        for (let fixedFactorId of fixedFactorsIds) {
+            if (!hasFixedFactor(currentParams, fixedFactorId)) {
+                addNewFixedFactor(currentParams, fixedFactorId);
+            }
+        }
+
+        updateFormHTML(currentParams);
+        updateFormValues(currentParams);
+        updateParams(currentParams, form);
+    });
+
+    numberOfRandomFactorsInput.addEventListener('change', e => {
+        updateNumberOfVariables(currentParams, form);
+
+        let randomFactorsIds = generateIdsForForm(getNumberOfRandomFactors(currentParams), 'rf');
+
+        deleteOldVars(currentParams, randomFactorsIds, getRandomFactorsIds(currentParams));
+
+        for (let randomFactorId of randomFactorsIds) {
+            if (!hasRandomFactor(currentParams, randomFactorId)) {
+                addNewRandomFactor(currentParams, randomFactorId);
+            }
+        }
+
+        updateFormHTML(currentParams);
+        updateFormValues(currentParams);
+        updateParams(currentParams, form);
+    });
+
+
+    form.addEventListener('submit', e => {
+        e.preventDefault();
+        updateParams(currentParams, form);
+    });
+
+    downloadJSONBtn.addEventListener('click', e => {
+        let text = JSON.stringify(currentParams, null, 2);
+        download(`${getProjectName(currentParams)}.JSON`, text);
+    });
+
+    loadJSONInput.addEventListener('change', e => {
+        const reader = new FileReader()
+        reader.onload = e => {
+            let newParams = JSON.parse(e.target.result);
+            updateFormHTML(newParams);
+            updateFormValues(newParams);
+            updateParams(currentParams, form);
+        };
+        reader.readAsText(e.target.files[0])
+    });
+
+    example2wbBtn.addEventListener('click', e => {
+        e.preventDefault();
+        setMaximalModelCheckbox(form, true);
+        updateFormHTML(exampleParams2wb);
+        updateFormValues(exampleParams2wb);
+        updateParams(currentParams, form);
+    });
+
+    example2ww2wbBtn.addEventListener('click', e => {
+        e.preventDefault();
+        setMaximalModelCheckbox(form, true);
+        updateFormHTML(exampleParams2ww2wb);
+        updateFormValues(exampleParams2ww2wb);
+        updateParams(currentParams, form);
+    });
+
+
+    copyBtn.addEventListener('click', e => {
+        codeTextarea.select();
+        codeTextarea.setSelectionRange(0, 99999);
+
+        navigator.clipboard.writeText(codeTextarea.value);
+    });
+
+    downloadBtn.addEventListener('click', e => {
+        let text = codeTextarea.value;
+        download(`${getProjectName(currentParams)}.R`, text);
+    });
+
+    function fixedFactorsSelectHandler() {
+        updateParams(currentParams, form);
+        updateFormHTML(currentParams);
+        updateFormValues(currentParams);
+    }
+
+
+    // Generate HTML
+
+    function getCorrTableHTML(params, tablePrefix, vars, caption) {
+        let thead = `<th></th>\n`;
+        for (let i = 1; i < vars.length; i++) {
+            thead += `                    <th>${ getNameSpan(params, vars[i]) }</th>\n`;
+        }
+        let tbody = '';
+        for (let i = 0; i < vars.length - 1; i++) {
+            tbody += `                <tr>\n`
+            tbody += `                    <td>${ getNameSpan(params, vars[i]) }</td>\n`
+            for (let j = 1; j < vars.length; j++) {
+                if (i >= j) {
+                    tbody += `                    <td></td>\n`;
+                }
+                else {
+                    tbody += `                    <td><input type="number" step="0.0001" name="${ tablePrefix + '-' + vars[i] + '-' + vars[j]}" value="0"></td>\n`;
+                }
+
+            }
+            tbody += `                </tr>\n`
+        }
+        let html = `<table>
+            <caption>${caption}</caption>
+            <thead>
+                <tr>
+                    ${thead}
+                </tr>
+            </thead>
+            <tbody>
+${tbody}
+            </tbody>
+        </table>
+        `
+
+        return html;
+    }
+
+    function getFixedFactorFieldset(params, fixedFactorId) {
+        let html = `    <fieldset>
+        <legend>${getNameSpan(params, fixedFactorId)}</legend>
+        <label>Variable name
+            <input type="text" name="${fixedFactorId}-name" id="${fixedFactorId}-name">
+        </label>
+        <br>
+        <label>Level 1 name
+            <input type="text" name="${fixedFactorId}-lev1-name">
+        </label>
+        <br>
+        <label>Level 2 name
+            <input type="text" name="${fixedFactorId}-lev2-name">
+        </label>
+        <br>
+        <label>Main effect of ${getNameSpan(params, fixedFactorId)}
+            <input type="number" step="0.0001" name="${fixedFactorId}-main-effect" value="0">
+        </label>
+        <br>\n`;
+
+        html += `    </fieldset>\n`
+        return html;
+    }
+
+    function getFixedFactorsFieldsets(params) {
+        let fieldsets = '';
+        for (let fixedFactorId of getFixedFactorsIds(params)) {
+            fieldsets += getFixedFactorFieldset(params, fixedFactorId);
+        }
+        return fieldsets;
+    }
+
+    function getInteractionFieldset(params) {
+        let fieldset = '';
+        fieldset += `    <fieldset>
+        <legend>Interactions</legend>`;
+        for (let {firstVarId, secondVarId, interactionVarId} of getInteractionsObjs(params)) {
+            fieldset += `        <label>${getNameSpan(params, firstVarId)} * ${getNameSpan(params, secondVarId)}
+        <input type="number" step="0.0001" name="interaction-${interactionVarId}" value="0">
+    </label><br>\n`;
+        }
+        fieldset += `    </fieldset>`;
+        return fieldset;
+    }
+
+    function getRandomFactorFieldset(params, randomFactor) {
+        let slopesHtml = '';
+        let withinVarsIds = getRandomFactorWithinVarsIds(params, randomFactor);
+        for (let varId of withinVarsIds) {
+            slopesHtml += `        <label>By-${getName(params, randomFactor)} random slope sd for <span class="${varId}-name-placeholder">${getName(params, varId)}</span>
+            <input type="number" step="0.0001" name="${getId(randomFactor)}-slope-sd-${varId}" value="0">
+        </label>
+        <br>
+`;
+        }
+
+        for (let {firstVarId, secondVarId, interactionVarId} of getInteractionsObjsFromVarsIds(withinVarsIds)) {
+                slopesHtml += `        <label>By-${getName(params, randomFactor)} random slope sd for <span class="${firstVarId}-name-placeholder">${getName(params, firstVarId)}</span> * <span class="${secondVarId}-name-placeholder">${getName(params, secondVarId)}</span>
+            <input type="number" step="0.0001" name="${getId(randomFactor)}-slope-sd-${interactionVarId}" value="0">
+        </label>
+        <br>
+`;
+        }
+        
+        let fixedFactorsSelects = '';
+        fixedFactorsSelects += `<h3 >Fixed factors</h3>`;
+        for (let fixedFactor of getFixedFactors(params)){
+            fixedFactorsSelects += `        <label>${getNameSpan(params, getId(fixedFactor))}
+        <select class="${getId(randomFactor)}-select" name="${getId(randomFactor)}-select-for-${getId(fixedFactor)}" onchange="fixedFactorsSelectHandler();">
+                <option${isWithin(randomFactor, getId(fixedFactor)) ? ' selected' : ''}>Within</option>
+                <option${isBetween(randomFactor, getId(fixedFactor)) ? ' selected' : ''}>Between</option>
+            </select>
+        </label>
+        ${isBetween(randomFactor, getId(fixedFactor)) ?
+            `<label>${getNameSpan(params, getId(randomFactor))} in ${getName(params, getFixedFactorLevels(fixedFactor).lev1)}: <input type="number" name="${getId(randomFactor)}-by-${getId(fixedFactor)}-lev1-n" value="0"></label>
+            <label>${getNameSpan(params, getId(randomFactor))} in ${getName(params, getFixedFactorLevels(fixedFactor).lev2)}: <input type="number" name="${getId(randomFactor)}-by-${getId(fixedFactor)}-lev2-n" value="0"></label>`
+            : ''
+        }
+        <br>`;
+        }
+
+        let corrTable = getCorrTableHTML(
+            params,
+            getId(randomFactor) + '-corr',
+            getVarsIdsForRandomFactor(params, randomFactor),
+            `By-${getName(params, randomFactor)} random effect correlations`);
+
+
+        let html = `    <fieldset>
+        <legend>${getNameSpan(params, getId(randomFactor))}</legend>
+        <label>Variable name
+            <input type="text" name="${getId(randomFactor)}-name" id="${getId(randomFactor)}-name">
+        </label>
+        <br>
+        <label>Number of ${getName(params, randomFactor)}
+            <input type="number" name="${getId(randomFactor)}-n" value="0">
+        </label>
+        <br>
+        <label>By-${getName(params, randomFactor)} random intercept sd
+            <input type="number" step="0.0001" name="${getId(randomFactor)}-intercept-sd" value="0">
+        </label>
+        <br>
+${slopesHtml}
+${fixedFactorsSelects}
+        <div id="${getId(randomFactor)}-corr-table-div">${corrTable}</div>
+    </fieldset>
+`
+        return html;
+    }
+
+    function getRandomFactorsFieldsets(params) {
+        let fieldsets = '';
+        for (let randomFactor of getRandomFactors(params)) {
+            fieldsets += getRandomFactorFieldset(params, randomFactor);
+        }
+        return fieldsets;
+    }
+
+    function updateFixedAndRandomFactorsFieldsets(params) {
+        fixedFactorsFieldsetDiv.innerHTML = getFixedFactorsFieldsets(params);
+        interactionFieldsetDiv.innerHTML = getInteractionFieldset(params);
+        randomFactorsFieldsetDiv.innerHTML = getRandomFactorsFieldsets(params);
+    }
+
+    function updateVarsNames(params){
+        for (let varId of getFixedFactorsIds(params).concat(getRandomFactorsIds(params))) {
+            let inputVarName = document.getElementById(`${varId}-name`);
+            let varNamePlaceholders = document.getElementsByClassName(`${varId}-name-placeholder`);
+            let varName = inputVarName.value.trim();
+            if (varName === '') varName = varId;
+            for (let namePlaceholder of varNamePlaceholders) {
+                namePlaceholder.textContent = varName;
+            }
+
+        }
+    }
+
+
+    function updateFormHTML(params) {
+        updateFixedAndRandomFactorsFieldsets(params);
+    }
+
+
+    // Form interface
+    function getProjectNameFromForm(form) {
+        return form.elements['project-name'].value;
+    }
+
+    function getDepVarNameFromForm(form) {
+        return form.elements['dep-var-name'].value;
+    }
+
+    function getInterceptFromForm(form) {
+        return form.elements['intercept'].value;
+    }
+
+    function getResidualSdFromForm(form) {
+        return form.elements['residual'].value;
+    }
+
+    function getNumberOfFixedFactorsFromForm(form) {
+        return numberOfFixedFactorsInput.value;
+    }
+
+
+    function generateIdsForForm(numberOfIds, prefix) {
+        let ids = [];
+        for (let i = 1; i <= numberOfIds; i++) {
+            ids.push(prefix + i);
+        }
+        return ids;
+    }
+
+    function getFixedFactorDataFromForm(fixedFactorId) {
+        let data = {};
+        safeUpdateFromInputValue(data, 'name', `${fixedFactorId}-name`);
+        data.levels = {};
+        data.levels.lev1 = {};
+        data.levels.lev2 = {};
+        safeUpdateFromInputValue(data.levels.lev1, 'name', `${fixedFactorId}-lev1-name`);
+        safeUpdateFromInputValue(data.levels.lev1, 'n', `${fixedFactorId}-lev1-n`);
+        safeUpdateFromInputValue(data.levels.lev2, 'name', `${fixedFactorId}-lev2-name`);
+        safeUpdateFromInputValue(data.levels.lev2, 'n', `${fixedFactorId}-lev2-n`);
+        safeUpdateFromInputValue(data, 'mainEffect', `${fixedFactorId}-main-effect`);
+        return data;
+    }
+
+    function setFixedFactorDataInForm(form, params, fixedFactor) {
+        let fixedFactorId = getId(fixedFactor);
+        let {lev1, lev2} = getFixedFactorLevels(fixedFactor);
+        safeSetInputValue(`${fixedFactorId}-name`, getName(params, fixedFactor));
+        safeSetInputValue(`${fixedFactorId}-lev1-name`, getName(params, lev1));
+        safeSetInputValue(`${fixedFactorId}-lev1-n`, getN(lev1));
+        safeSetInputValue(`${fixedFactorId}-lev2-name`, getName(params, lev2));
+        safeSetInputValue(`${fixedFactorId}-lev2-n`, getN(lev2));
+        safeSetInputValue(`${fixedFactorId}-main-effect`, getMainEffect(fixedFactor));
+    }
+
+    function getFixedFactorsIdsFromForm(form) {
+        return generateIdsForForm(getNumberOfFixedFactorsFromForm(form), 'ff');
+    }
+
+    function getNumberOfRandomFactorsFromForm(form) {
+        return numberOfRandomFactorsInput.value;
+    }
+
+    function getRandomFactorsIdsFromForm(form) {
+        return generateIdsForForm(getNumberOfRandomFactorsFromForm(form), 'rf');
+    }
+
+    function getCorrTableValues(params, randomFactorId) {
+        let tablePrefix = `${randomFactorId}-corr`;
+        let vars = getVarsIdsForRandomFactor(params, getRandomFactor(params, randomFactorId));
+        let result = {};
+        let varInputName = '';
+        for (let i = 0; i < vars.length; i++) {
+            for (let j = i+1; j < vars.length; j++) {
+                varInputName = tablePrefix + '-' + vars[i] + '-' + vars[j];
+                if (!result[toCamelCase(vars[i])]) {
+                    result[toCamelCase(vars[i])] = {};
+                }
+                result[toCamelCase(vars[i])][toCamelCase(vars[j])] = safeGetFromInputValue(varInputName);
+            }
+        }
+        return result;
+    }
+
+    function setCorrTableValues(params, randomFactorId) {
+        let tablePrefix = `${randomFactorId}-corr`;
+        let randomFactor = getRandomFactor(params, randomFactorId);
+        let correlations = getCorrelations(randomFactor);
+        let varName = '';
+        for (let v1 in correlations) {
+            for (let v2 in correlations[v1]) {
+                varName = tablePrefix + '-' + v1 + '-' + v2;
+                safeSetInputValue(camelCaseToHyphens(varName), correlations[v1][v2]);
+            }
+        }
+    }
+
+    function setRandomFactorFormParams(params, randomFactor) {
+        let randomFactorId = getId(randomFactor);
+        safeSetInputValue(`${randomFactorId}-name`, getName(params, randomFactor));
+        safeSetInputValue(`${randomFactorId}-n`, getN(randomFactor));
+        safeSetInputValue(`${randomFactorId}-intercept-sd`, getInterceptSd(randomFactor));
+
+        for (let varId of getFixedFactorsIds(params)) {
+            safeSetInputValue(`${randomFactorId}-slope-sd-${varId}`, getSlopeSd(randomFactor, varId));
+        }
+
+        for (let interactionId of getInteractionsIds(params)) {
+            safeSetInputValue(`${randomFactorId}-slope-sd-${camelCaseToHyphens(interactionId)}`, getSlopeSd(randomFactor, interactionId));
+        }
+
+        setCorrTableValues(params, randomFactorId);
+    }
+
+    function getRandomFactorBetweenVarsNsFromForm(form, params, randomFactorId) {
+        let data = {};
+        let fixedFactorsIds = getFixedFactorsIdsFromForm(form);
+        for (let bVarId of fixedFactorsIds) {
+            data[bVarId] = {};
+            safeUpdateFromInputValue(data[bVarId], 'lev1', `${randomFactorId}-by-${bVarId}-lev1-n`);
+            safeUpdateFromInputValue(data[bVarId], 'lev2', `${randomFactorId}-by-${bVarId}-lev2-n`);
+        }
+        return data;
+    }
+
+    function updateFormNs(params) {
+        for (let randomFactor of getRandomFactors(params)) {
+            let randomFactorId = getId(randomFactor);
+            for (let bVar of getRandomFactorBetweenVars(params, randomFactorId)) {
+                let bVarId = getId(bVar);
+                let ns = getNsByBetweenVarLevels(randomFactor, bVarId);
+                safeSetInputValue(`${randomFactorId}-by-${bVarId}-lev1-n`, ns.lev1);
+                safeSetInputValue(`${randomFactorId}-by-${bVarId}-lev2-n`, ns.lev2);
+            }
+        }
+    }
+
+
+    function setMaximalModelCheckbox(form, checked) {
+        return form.elements['maximal-model'].checked = checked;
+    }
+
+    function isMaximalModelChecked(form) {
+        return form.elements['maximal-model'].checked;
+    }
+
+    function getUserModelFromForm(form) {
+        let model = form.elements['model-textarea'].value;
+        return model ? model : '';
+    }
+
+    function setUserModelInForm(form, model) {
+        form.elements['model-textarea'].value = model;
+    }
+
+    function toggleModelTextarea(isCheckboxChecked) {
+        if (isCheckboxChecked) {
+            modelTextareaLabel.setAttribute('hidden', true);
+        }
+        else {
+            modelTextareaLabel.removeAttribute('hidden');
+        }
+    }
+
+
+    function updateFormValues(params) {
+        safeSetInputValue('number-of-fixed-factors', getNumberOfFixedFactors(params));
+        safeSetInputValue('number-of-random-factors', getNumberOfRandomFactors(params));
+
+        let fixedFactorsIds = getFixedFactorsIds(params);
+        
+        for (let fixedFactorId of fixedFactorsIds) {
+            let fixedFactor = getFixedFactor(params, fixedFactorId);
+            setFixedFactorDataInForm(form, params, fixedFactor);
+        }
+
+        safeSetInputValue('project-name', getProjectName(params));
+        safeSetInputValue('dep-var-name', getDepVarName(params));
+        safeSetInputValue('intercept', getIntercept(params));
+        safeSetInputValue('residual', getResidualSd(params));
+
+        for (let interactionId of getInteractionsIdsFromVarsIds(fixedFactorsIds)) {
+            safeSetInputValue(`interaction-${interactionId}`, getInteraction(params, toCamelCase(interactionId)));
+        }
+
+        for (let randomFactor of getRandomFactors(params)) {
+            setRandomFactorFormParams(params, randomFactor);
+        }
+
+        updateFormNs(params);
+
+        updateVarsNames(params);
+
+        for (let varId of getFixedFactorsIds(params).concat(getRandomFactorsIds(params))) {
+            let inputVarName = document.getElementById(`${varId}-name`);
+            inputVarName.addEventListener('input', e => updateVarsNames(params));
+        }
+
+        toggleModelTextarea(maximalModelCheckbox.checked);
+
+        setUserModelInForm(form, getUserModel(params));
+
+        safeSetInputValue('seed', getSeed(params));
+
+    }
+
+
+    // Params interface
+
+    function getId(variable) {
+        return variable.id;
+    }
+
+    function getName(params, variable) {
+        let name = '';
+
+        if (isString(variable)) {
+            if (params.fixedFactors && params.fixedFactors[variable]) {
+                name = params.fixedFactors[variable].name;
+            }
+            else if (params.randomFactors && params.randomFactors[variable]) {
+                name = params.randomFactors[variable].name;
+            }
+            else if (isInteractionId(variable)) {
+                [firstVarId, secondVarId] = getVarIdsFromInteractionId(variable);
+                name = getName(params, firstVarId) + '_' + getName(params, secondVarId);
+            }
+            else if (variable === 'intercept') {
+                name = variable;
+            }
+        }
+        else {
+            name = variable.name;
+        }
+
+        return name;
+    }
+
+    function getNameSpan(params, varId) {
+        let span = '';
+        if (isInteractionId(varId)) {
+            let [firstVarId, secondVarId] = getVarIdsFromInteractionId(varId);
+            span = `<span class="${firstVarId}-name-placeholder">${getName(params, firstVarId)}</span> * <span class="${secondVarId}-name-placeholder">${getName(params, secondVarId)}</span>`;
+        }
+        else {
+            span = `<span class="${varId}-name-placeholder">${getName(params, varId)}</span>`;
+        }
+        return span;
+    }
+
+    function getN(variable) {
+        return variable.n;
+    }
+
+
+    function getProjectName(params) {
+        return params.projectName;
+    }
+
+    function setProjectName(params, name) {
+        params.projectName = name;
+    }
+
+    function getDepVarName(params) {
+        return params.depVarName;
+    }
+
+    function setDepVarName(params, name) {
+        params.depVarName = name;
+    }
+
+    function getIntercept(params) {
+        return params.intercept;
+    }
+
+    function setIntercept(params, intercept) {
+        params.intercept = intercept;
+    }
+
+    function getResidualSd(params) {
+        return params.residualSd
+    }
+
+    function setResidualSd(params, residualSd) {
+        params.residualSd = residualSd;
+    }
+
+    function getNumberOfFixedFactors(params) {
+        return params.numberOfVariables.fixedFactors;
+    }
+
+    function getNumberOfRandomFactors(params) {
+        return params.numberOfVariables.randomFactors;
+    }
+
+    function updateNumberOfVariables(params, form) {
+        if (!params.numberOfVariables) {
+            params.numberOfVariables = {};
+        }
+        params.numberOfVariables.fixedFactors = getNumberOfFixedFactorsFromForm(form);
+        params.numberOfVariables.randomFactors = getNumberOfRandomFactorsFromForm(form);
+    }
+
+
+    function deleteVar(params, varId) {
+        safeDeleteObjectProperty(params.fixedFactors, varId);
+
+        safeDeleteObjectProperty(params.randomFactors, varId);
+
+        safeDeleteObjectProperty(params.interactions, varId);
+
+        for (let randomFactor of getRandomFactors(params)) {
+            deleteWithinVar(randomFactor, varId);
+            deleteBetweenVar(randomFactor, varId);
+
+            safeDeleteObjectProperty(randomFactor.slopeSd, varId);
+            safeDeleteObjectProperty(randomFactor.nByBetweenVarsLevels, varId);
+            safeDeleteObjectProperty(randomFactor.corr, varId);
+            for (let corr of Object.values(randomFactor.corr)) {
+                safeDeleteObjectProperty(corr, varId);
+            }
+        }
+
+        for (let interactionId of getFixedFactorInteractionsIds(params, varId)) {
+            interactionId = toCamelCase(interactionId);
+            deleteVar(params, interactionId);
+        }
+    }
+
+    function deleteOldVars(params, newVarsIds, oldVarsIds) {
+        for (let oldId of oldVarsIds) {
+            if (!newVarsIds.includes(oldId)) {
+                deleteVar(params, oldId);
+            }
+        }
+    }
+
+
+    function getFixedFactor(params, id) {
+        return params.fixedFactors[id];
+    }
+
+    function hasFixedFactor(params, fixedFactorId) {
+        return currentParams.fixedFactors[fixedFactorId] !== undefined;
+    }
+
+    function addNewFixedFactor(params, fixedFactorId) {
+        params.fixedFactors[fixedFactorId] = {
+            id: fixedFactorId,
+            name: fixedFactorId,
+            levels: {
+                lev1: { id:'lev1', name: 'lev1' },
+                lev2: { id:'lev2', name: 'lev1' }
+            },
+            mainEffect: 0
+        };
+        for (let randomFactor of getRandomFactors(params)) {
+            addWithinVar(randomFactor, fixedFactorId);
+        }
+    }
+
+    function setFixedFactorLevels(fixedFactor, levelsNewData) {
+        if (!fixedFactor.levels) {
+            fixedFactor.levels = {};
+        }
+        updateObj(fixedFactor.levels, levelsNewData);
+    }
+
+    function setFixedFactor(params, fixedFactorId, fixedFactorNewData) {
+        if (!params.fixedFactors) {
+            params.fixedFactors = {};
+        }
+        if (!params.fixedFactors[fixedFactorId]) {
+            params.fixedFactors[fixedFactorId] = {};
+            params.fixedFactors[fixedFactorId].id = fixedFactorId;
+        }
+        updateObj(params.fixedFactors[fixedFactorId], fixedFactorNewData, ['levels']);
+        setFixedFactorLevels(params.fixedFactors[fixedFactorId], fixedFactorNewData.levels);
+    }
+
+    function getFixedFactors(params) {
+        let values = [];
+        if (params.fixedFactors) {
+            values = Object.values(params.fixedFactors);
+        }
+        return values;
+    }
+
+    function getFixedFactorsIds(params) {
+        let ids = [];
+        if (params.fixedFactors) {
+            ids = Object.keys(params.fixedFactors);
+        }
+        return ids;
+    }
+
+    function applyToFixedFaxtors(f, params) {
+        return getFixedFactors(params).map(f);
+    }
+
+    function getFixedFactorsStringifyNameList(params) {
+        return applyToFixedFaxtors(ff => getName(params, ff), params).join(', ');
+    }
+
+    function getFixedFactorLevels(fixedFactor) {
+        return fixedFactor.levels;
+    }
+
+    function getFixedFactorLevelsList(fixedFactor) {
+        return Object.values(fixedFactor.levels);
+    }
+
+    function getFixedFactorInteractionsIds(params, fixedFactorId) {
+        let interactionsIds = [];
+        let otherFixedFactorsIds = getFixedFactorsIds(params).filter(id => id !== fixedFactorId);
+        for (let otherFixedFactorId of otherFixedFactorsIds) {
+            interactionsIds.push(getInteractionId(fixedFactorId, otherFixedFactorId));
+            interactionsIds.push(getInteractionId(otherFixedFactorId, fixedFactorId));
+        }
+        interactionsIds = interactionsIds.filter(id => getInteraction(params, toCamelCase(id)) !== undefined);
+        return interactionsIds;
+    }
+
+    function getMainEffect(fixedFactor) {
+        return fixedFactor.mainEffect;
+    }
+
+
+    function getInteraction(params, interactionId) {
+        return params.interactions[interactionId];
+    }
+
+    function getInteractionsIds(params) {
+        let ids = [];
+        if (params.interactions) {
+            ids = Object.keys(params.interactions);
+        }
+        return ids;
+    }
+
+    function getInteractionsObjs(params) {
+        return getInteractionsObjsFromVarsIds(getFixedFactorsIds(params));
+    }
+
+
+    function getRandomFactor(params, id) {
+        return params.randomFactors[id];
+    }
+
+    function addNewRandomFactor(params, randomFactorId) {
+        let fixedFactorsIds = getFixedFactorsIds(params);
+        params.randomFactors[randomFactorId] = {
+            id: randomFactorId,
+            name: randomFactorId,
+            fixedFactors: {
+                between: [],
+                within: fixedFactorsIds
+            },
+            n: 0,
+            interceptSd: 0,
+            slopeSd: {},
+            corr: {},
+            nByBetweenVarsLevels : {}
+        };
+    }
+
+    function hasRandomFactor(params, randomFactorId) {
+        return currentParams.randomFactors[randomFactorId] !== undefined;
+    }
+
+    function getRandomFactors(params) {
+        let values = [];
+        if (params.randomFactors) {
+            values = Object.values(params.randomFactors);
+        }
+        return values;
+    }
+
+    function getRandomFactorsIds(params) {
+        let ids = [];
+        if (params.randomFactors) {
+            ids = Object.keys(params.randomFactors);
+        }
+        return ids;
+    }
+
+    function getCorrelation(randomFactor, firstVarId, secondVarId) {
+        return randomFactor.corr[firstVarId][secondVarId];
+    }
+
+    function getCorrelations(randomFactor) {
+        return randomFactor.corr;
+    }
+
+    function getInterceptSd(randomFactor) {
+        return randomFactor.interceptSd;
+    }
+
+    function getSlopeSd(randomFactor, varId) {
+        return randomFactor.slopeSd[varId];
+    }
+
+    function applyToRandomFactors(f, params) {
+        return getRandomFactors(params).map(f);
+    }
+
+    function getRandomFactorsStringifyNameList(params) {
+        return applyToRandomFactors(ff => getName(params, ff), params).join(', ');
+    }
+
+    function updateRandomFactorBetweenVarsNs(params, randomFactor, form) {
+        let nsObj = getRandomFactorBetweenVarsNsFromForm(form, params, getId(randomFactor));
+
+        let fixedFactorsIds = Object.keys(nsObj);
+        for (let bVarId of fixedFactorsIds) {
+            if (!randomFactor.nByBetweenVarsLevels[bVarId]) {
+                randomFactor.nByBetweenVarsLevels[bVarId] = {};
+            }
+            updateObj(randomFactor.nByBetweenVarsLevels[bVarId], nsObj[bVarId]);
+        }
+        
+        deleteOldValuesFromObject(randomFactor.nByBetweenVarsLevels, fixedFactorsIds);
+    }
+
+    function updateRandomFactorParams(params, randomFactorId) {
+        if (!params.randomFactors) {
+            params.randomFactors = {};
+        }
+
+        let randomFactor = getRandomFactor(params, randomFactorId);
+        if (!randomFactor) {
+            randomFactor = {};
+            randomFactor.id = randomFactorId;
+            randomFactor.slopeSd = {};
+            randomFactor.fixedFactors = {};
+            randomFactor.nByBetweenVarsLevels = {};
+            params.randomFactors[randomFactorId] = randomFactor;
+        }
+
+        safeUpdateFromInputValue(randomFactor, 'name', `${randomFactorId}-name`);
+        safeUpdateFromInputValue(randomFactor, 'n', `${randomFactorId}-n`);
+        safeUpdateFromInputValue(randomFactor, 'interceptSd', `${randomFactorId}-intercept-sd`);
+        
+        // Fixed factors slopes
+        let varIds = getFixedFactorsIds(params);
+        for (let varId of varIds) {
+            safeUpdateFromInputValue(randomFactor.slopeSd, varId, `${randomFactorId}-slope-sd-${varId}`);
+        }
+        deleteOldValuesFromObject(randomFactor.slopeSd, varIds);
+
+        // Fixed factors interaction slopes
+        for (let interactionId of getInteractionsIdsFromVarsIds(varIds)) {
+            safeUpdateFromInputValue(randomFactor.slopeSd, toCamelCase(interactionId), `${randomFactorId}-slope-sd-${interactionId}`);
+        }
+
+        // Within and between variables
+        updateWithinAndBetweenVars(params, randomFactor);
+        updateRandomFactorBetweenVarsNs(params, randomFactor, form);
+
+        // Correlations
+        randomFactor.corr = getCorrTableValues(params, randomFactorId);
+    }
+
+
+    function hasWithinVars(randomFactor) {
+        return randomFactor.fixedFactors.within.length > 0;
+    }
+
+    function hasBetweenVars(randomFactor) {
+        return randomFactor.fixedFactors.between.length > 0;
+    }
+
+    function addWithinVar(randomFactor, varId) {
+        if (!randomFactor.fixedFactors.within.includes(varId)) {
+            randomFactor.fixedFactors.within.push(varId);
+        }
+        deleteBetweenVar(randomFactor, varId);
+    }
+
+    function deleteWithinVar(randomFactor, varId) {
+        let idx = randomFactor.fixedFactors.within.indexOf(varId);
+        if (idx >= 0) {
+            randomFactor.fixedFactors.within.splice(idx, 1);
+        }
+    }
+
+    function addBetweenVar(randomFactor, varId) {
+        if (!randomFactor.fixedFactors.between.includes(varId)) {
+            randomFactor.fixedFactors.between.push(varId);
+        }
+        deleteWithinVar(randomFactor, varId)
+    }
+
+    function deleteBetweenVar(randomFactor, varId) {
+        let idx = randomFactor.fixedFactors.between.indexOf(varId);
+        if (idx >= 0) {
+            randomFactor.fixedFactors.between.splice(idx, 1);
+        }
+    }
+
+    function isWithinVarOfRandomFactor(randomFactor, varId) {
+        return randomFactor.fixedFactors.within.includes(varId);
+    }
+
+    function getRandomFactorWithinVarsIds(params, randomFactor) {
+        let withinVarsIds = [];
+        if (isString(randomFactor)) {
+            let randomFactorId = randomFactor;
+            randomFactor = getRandomFactor(params, randomFactorId);
+        }
+        withinVarsIds = randomFactor.fixedFactors.within;
+        return withinVarsIds;
+    }
+
+    function getRandomFactorBetweenVarsIds(params, randomFactor) {
+        let betweenVarsIds = [];
+        if (isString(randomFactor)) {
+            let randomFactorId = randomFactor;
+            randomFactor = getRandomFactor(params, randomFactorId);
+        }
+        betweenVarsIds = randomFactor.fixedFactors.between;
+        return betweenVarsIds;
+    }
+
+    function getRandomFactorBetweenVars(params, randomFactorId) {
+        return getRandomFactorBetweenVarsIds(params, randomFactorId).map(id => getFixedFactor(params, id));
+    }
+
+    function getAllBetweenVars(params) {
+        let randomFactors = getRandomFactors(params);
+        let betweenVars = [];
+        for (let randomFactor of randomFactors) {
+            betweenVars = betweenVars.concat(randomFactor.fixedFactors.between);
+        }
+        betweenVars = [... new Set(betweenVars)]
+        return betweenVars;
+    }
+
+    function getAllWithinVars(params) {
+        let randomFactors = getRandomFactors(params);
+        let withinVars = [];
+        for (let randomFactor of randomFactors) {
+            withinVars = withinVars.concat(getRandomFactorWithinVarsIds(params, randomFactor));
+        }
+        withinVars = [... new Set(withinVars)]
+        return withinVars;
+    }
+
+    function getWithinVarsDiffBetweenVars(params) {
+        let withinVars = getAllWithinVars(params);
+        let betweenVars = getAllBetweenVars(params);
+        let vars = withinVars.filter(v => !betweenVars.includes(v));
+        vars = [... new Set(vars)]
+        return vars;
+    }
+
+    function isWithin(randomFactor, fixedFactorId) {
+        return randomFactor.fixedFactors.within.includes(fixedFactorId);
+    }
+
+    function isBetween(randomFactor, fixedFactorId) {
+        return randomFactor.fixedFactors.between.includes(fixedFactorId);
+    }
+
+    function getNsByBetweenVarLevels(randomFactor, betweenVarId) {
+        return randomFactor.nByBetweenVarsLevels[betweenVarId];
+    }
+
+    function setNsByBetweenVarLevels(randomFactor, betweenVarId, ns) {
+        randomFactor.nByBetweenVarsLevels[betweenVarId].lev1 = ns.lev1;
+        randomFactor.nByBetweenVarsLevels[betweenVarId].lev2 = ns.lev2;
+    }
+
+    function updateWithinAndBetweenVars(params, randomFactor) {
+        if (!randomFactor.fixedFactors.within){
+            randomFactor.fixedFactors.within = [];
+        }
+        if (!randomFactor.fixedFactors.between){
+            randomFactor.fixedFactors.between = [];
+        }
+        for (let fixedFactorId of getFixedFactorsIdsFromForm(form)) {
+            let withinOrBetween = safeGetFromInputValue(`${getId(randomFactor)}-select-for-${fixedFactorId}`);
+            if (withinOrBetween === 'Within') {
+                addWithinVar(randomFactor, fixedFactorId);
+            }
+            else if (withinOrBetween === 'Between') {
+                addBetweenVar(randomFactor, fixedFactorId);
+                if (!randomFactor.nByBetweenVarsLevels[fixedFactorId] || isEmpty(randomFactor.nByBetweenVarsLevels[fixedFactorId])) {
+                    randomFactor.nByBetweenVarsLevels[fixedFactorId] = {'lev1': 0, 'lev2': 0};
+                }
+            }
+        }
+    }
+
+    function getAllVarsIds(params, withInteractions = true) {
+        let varsIds = ['intercept'].concat(getFixedFactorsIds(params));
+        if (withInteractions) {
+            varsIds = varsIds.concat(getInteractionsIdsFromVarsIds(getFixedFactorsIds(params)))
+        }
+        return varsIds;
+    }
+
+    function getVarsIdsForRandomFactor(params, randomFactor, withInteractions = true) {
+        let varsIds = ['intercept'].concat(getRandomFactorWithinVarsIds(params, randomFactor));
+        if (withInteractions) {
+            varsIds = varsIds.concat(getInteractionsIdsFromVarsIds(getRandomFactorWithinVarsIds(params, randomFactor)))
+        }
+        return varsIds;
+    }
+
+
+    function getUserModel(params) {
+        let model = params.userModel;
+        return model ? model : '';
+    }
+
+    function getSeed(params) {
+        return params.seed;
+    }
+
+
+    function updateParams(params, form) {
+        setProjectName(params, getProjectNameFromForm(form));
+        setDepVarName(params, getDepVarNameFromForm(form));
+        setIntercept(params, getInterceptFromForm(form));
+        setResidualSd(params, getResidualSdFromForm(form));
+
+        // Fixed factors
+        updateNumberOfVariables(params, form);
+
+        let fixedFactorsIds = getFixedFactorsIdsFromForm(form);
+
+        for (let fixedFactorId of fixedFactorsIds) {
+            let fixedFactorData = getFixedFactorDataFromForm(fixedFactorId);
+            setFixedFactor(params, fixedFactorId, fixedFactorData);
+        }
+
+        deleteOldVars(params, fixedFactorsIds, getFixedFactorsIds(params));
+
+        // Interactions
+        let interactionsIds = getInteractionsIdsFromVarsIds(fixedFactorsIds);
+        if (params.interactions) {
+            deleteOldValuesFromObject(params.interactions, interactionsIds.map(id => toCamelCase(id)));
+        }
+        else {
+            params.interactions = {};
+        }
+        for (let interactionId of interactionsIds) {
+            safeUpdateFromInputValue(params.interactions, toCamelCase(interactionId), `interaction-${interactionId}`);
+        }
+
+        // Random factors
+        let randomFactorsIds = getRandomFactorsIdsFromForm(form);
+
+        for (let randomFactorId of randomFactorsIds) {
+            updateRandomFactorParams(params, randomFactorId);
+        }
+
+        deleteOldVars(params, randomFactorsIds, getRandomFactorsIds(currentParams));
+
+        for (let randomFactor of getRandomFactors(params)) {
+            updateRandomFactorBetweenVarsNs(params, randomFactor, form);
+        }
+
+        // user model
+        safeUpdateFromInputValue(params, 'userModel', 'model-textarea');
+
+        // Seed
+        safeUpdateFromInputValue(params, 'seed', 'seed');
+
+        codeTextarea.value = getCode(params);
+    }
+
+
+    // Generate R code
+
+    function getNs(params) {
+        let ns = '';
+        for (let randomFactor of getRandomFactors(params)) {
+            ns += getRandomFactorNsList(
+                    params,
+                    randomFactor,
+                    withValues=true,
+                    withCommas=true,
+                    withComments=true
+                ).map(s => '    ' + s).join('');
+        }
+        return ns;
+    }
+
+    function getRandomFactorNsList(params, randomFactor, withValues=true, withCommas=false, withComments=false) {
+        let ns = [];
+        if (hasBetweenVars(randomFactor)) {
+            let firstBetweenVarId = getId(getRandomFactorBetweenVars(params, getId(randomFactor))[0]);
+            let levels = getFixedFactorLevels(getFixedFactor(params, firstBetweenVarId));
+            let nsByBetweenVarLevels = getNsByBetweenVarLevels(randomFactor, firstBetweenVarId);
+            let randomFactorName = getName(params, randomFactor);
+            for (let levelId of LevelsIds) {
+                let level = levels[levelId];
+                let levelName = getName(params, level);
+                levelN = nsByBetweenVarLevels[levelId];
+                let n = '';
+                n += `n_${randomFactorName}_${levelName}`;
+                if (withValues) n += `= ${levelN}`;
+                if (withCommas) n += `,`;
+                if (withComments) n += ` # number of ${randomFactorName} in ${levelName}\n`;
+                ns.push(n);
+            }
+        }
+        else {
+            let n = '';
+            n = `n_${getName(params, randomFactor)}`;
+            if (withValues) n += ` = ${getN(randomFactor)}`;
+            if (withCommas) n += `,`;
+            if (withComments) n += ` # number of ${getName(params, randomFactor)}\n`;
+            ns.push(n);
+        }
+        return ns;
+    }
+
+    function getBetas(params) {
+        let betas = '';
+        betas += `beta_intercept     = ${getIntercept(params)}, # intercept (grand mean)\n`;
+
+        betas += applyToFixedFaxtors(
+            ff => `    beta_${getName(params, ff)}     =  ${getMainEffect(ff)}, # main effect of ${getName(params, ff)}\n`,
+            params
+        ).join('');
+
+        let fixedFactorsIds = getFixedFactorsIds(params);
+        for (let i = 0; i < fixedFactorsIds.length - 1; i++) {
+            for (let j = i+1; j < fixedFactorsIds.length; j++) {
+                let firstVarName = getName(params, fixedFactorsIds[i]);
+                let secondVarName = getName(params, fixedFactorsIds[j]);
+                let interactionId = toCamelCase(getInteractionId(fixedFactorsIds[i], fixedFactorsIds[j]));
+                betas += `    beta_${firstVarName}_${secondVarName}    =  ${getInteraction(params, interactionId)}, # interaction between ${firstVarName} and ${secondVarName}\n`;
+            }
+        }
+
+        return betas;
+    }
+
+    function getCorrMatrix(params, randomFactor) {
+        let vars = getVarsIdsForRandomFactor(params, randomFactor);
+        let corrMatrix = 'c(';
+        let corrValues = '';
+        let varNames = '';
+        for (let i = 0; i < vars.length - 1; i++) {
+            let firstVarId = vars[i];
+            varNames += `# beta_${getName(params, firstVarId)} * `;
+            for (let j = i+1; j < vars.length; j++) {
+                let secondVarId = vars[j];
+                corrValues += `${getCorrelation(randomFactor, toCamelCase(firstVarId), toCamelCase(secondVarId))}, `;
+                varNames += `beta_${getName(params, secondVarId)}, `;
+            }
+            if (i === vars.length - 2) {
+                corrValues = trimLastNCharacters(corrValues) + ' ';
+            }
+            varNames = trimLastNCharacters(varNames);
+            corrMatrix += corrValues + varNames + '\n';
+            corrValues = '';
+            varNames = '';
+        }
+        corrMatrix += '),'
+        return corrMatrix; 
+    }
+
+    function getRandomFactorParams(params, randomFactor) {
+        let randomFactorName = getName(params, randomFactor);
+        let code = '';
+        code += `    ${randomFactorName}_intercept     = ${getInterceptSd(randomFactor)}, # by-${randomFactorName} random intercept sd\n`;
+
+        let fixedFactorsIds = getRandomFactorWithinVarsIds(params, randomFactor);
+
+        for (let fixedFactorId of fixedFactorsIds) {
+            let fixedFactorName = getName(params, fixedFactorId);
+            code += `    ${randomFactorName}_${fixedFactorName}     =  ${getSlopeSd(randomFactor, fixedFactorId)}, # by-${randomFactorName} random slope sd for ${fixedFactorName}\n`;
+        }
+
+        for (let i = 0; i < fixedFactorsIds.length - 1; i++) {
+            for (let j = i+1; j < fixedFactorsIds.length; j++) {
+                let firstVarName = getName(params, fixedFactorsIds[i]);
+                let secondVarName = getName(params, fixedFactorsIds[j]);
+                let interactionId = toCamelCase(getInteractionId(fixedFactorsIds[i], fixedFactorsIds[j]));
+                code += `    ${randomFactorName}_${firstVarName}_${secondVarName}    =  ${getSlopeSd(randomFactor, interactionId)}, # by-${randomFactorName} random slope sd for ${firstVarName}*${secondVarName}\n`;
+            }
+        }
+
+        code += `    # by-${randomFactorName} random effect correlations\n`;
+        code += `    ${randomFactorName}_rho   = ${getCorrMatrix(params, randomFactor)}\n`;
+
+        return code;
+    }
+
+    function getRandomFactorsParams(params) {
+        return applyToRandomFactors(
+            rf => getRandomFactorParams(params, rf),
+            params
+        ).join('');
+    }
+
+    function getSimulateRandomFactor(params, randomFactor) {
+        let randomFactorName = getName(params, randomFactor);
+
+        let n = getRandomFactorNsList(params, randomFactor, withValues=false).join(' + ');
+        let sdVars = '';
+        for (let varId of getVarsIdsForRandomFactor(params, randomFactor)) {
+            sdVars += `${randomFactorName}_${getName(params, varId)}, `;
+        }
+        sdVars = trimLastNCharacters(sdVars);
+
+        let betweenVars = '';
+        if (hasBetweenVars(randomFactor)) {
+            for (let bVarId of getRandomFactorBetweenVarsIds(params, randomFactor)) {
+                betweenVars += `,\n${getName(params, bVarId)} = rep(`;
+                let levelNames = 'c(';
+                let levelNs = 'c(';
+                for (level of getFixedFactorLevelsList(getFixedFactor(params, bVarId))) {
+                    levelNames += `"${getName(params, level)}", `;
+                    levelNs += `n_${randomFactorName}_${getName(params, level)}, `;
+                }
+                levelNames = trimLastNCharacters(levelNames) + '),\n';
+                levelNs = trimLastNCharacters(levelNs) + ')';
+                betweenVars += levelNames + levelNs + ')';
+            }
+        }
+
+        let varnames = '';
+        for (let varId of getVarsIdsForRandomFactor(params, randomFactor)) {
+            varnames += `"${randomFactorName}_${getName(params, varId)}", `;
+        }
+        varnames = trimLastNCharacters(varnames);
+
+        let code = '';
+        code += `    # simulate ${randomFactorName}
+        # sample from a multivariate random distribution
+        ${randomFactorName} <- faux::rnorm_multi(
+    n = ${n},
+    mu = 0, # means for random effects are always 0
+    sd = c(${sdVars}),
+    r = ${randomFactorName}_rho,
+    varnames = c(${varnames})
+  ) %>%
+    mutate(${randomFactorName}_id = faux::make_id(nrow(.), "${randomFactorName}")${betweenVars})\n`;
+        return code;
+    }
+
+    function getSimulateRandomFactors(params) {
+        return applyToRandomFactors(rf => getSimulateRandomFactor(params, rf), params).join('');
+    }
+
+    function getSimulateTrialsCrossing(params) {
+        let crossingParams = '';
+
+        crossingParams += getRandomFactorsStringifyNameList(params) + ', ';
+
+        let vars = getWithinVarsDiffBetweenVars(params);
+
+        if (vars.length > 0) {
+            for (let varId of vars) {
+                crossingParams += `${getName(params, varId)} = factor(c(`;
+                for (let level of getFixedFactorLevelsList(getFixedFactor(params, varId))) {
+                    crossingParams += `"${getName(params, level)}", `;
+                }
+                crossingParams = trimLastNCharacters(crossingParams);
+                crossingParams += `), `;
+            }
+            crossingParams += `ordered = TRUE), `;
+        }
+        crossingParams = trimLastNCharacters(crossingParams);
+
+        return crossingParams;
+    }
+
+    function getSimulateTrialsXs(params) {
+        let xs = '';
+        for (let fixedFactor of getFixedFactors(params)) {
+            let fixedFactorName = getName(params, fixedFactor);
+            let {lev1, lev2} = getFixedFactorLevels(fixedFactor);
+            xs += `      X_${fixedFactorName} = recode(${fixedFactorName}, `;
+            xs += `"${getName(params, lev1)}" = -0.5, `;
+            xs += `"${getName(params, lev2)}" = 0.5`; // Assumes variables with only two levels
+            xs += `),\n`;
+        }
+        return xs;
+    }
+
+    function getSimulateTrialsBs(params) {
+        let varIds = getAllVarsIds(params);
+        let randomFactors = getRandomFactors(params);
+        let Bs = '';
+        // Intercept
+        Bs += `      B_intercept = beta_intercept +`;
+        for (let randomFactor of randomFactors) {
+            Bs += ` ${getName(params, randomFactor)}_intercept +`;
+        }
+        Bs = trimLastNCharacters(Bs) + ',\n';
+        // Fixed factors
+        for (let fixedFactorId of getFixedFactorsIds(params)) {
+            let fixedFactor = getFixedFactor(params, fixedFactorId);
+            let fixedFactorName = getName(params, fixedFactor);
+            Bs += `      B_${fixedFactorName} = beta_${fixedFactorName} +`;
+            for (let randomFactor of randomFactors) {
+                if (isWithinVarOfRandomFactor(randomFactor, fixedFactorId)) {
+                    Bs += ` ${getName(params, randomFactor)}_${fixedFactorName} +`;
+                }
+            }
+            Bs = trimLastNCharacters(Bs) + ',\n';
+        }
+        //Interactions
+        for (let interactionId of getInteractionsIds(params)) {
+            interactionId = camelCaseToHyphens(interactionId);
+            let interactionName = getName(params, interactionId);
+            let [firstVarId, secondVarId] = getVarIdsFromInteractionId(interactionId);
+            Bs += `      B_${interactionName} = beta_${interactionName} +`;
+            for (let randomFactor of randomFactors) {
+                if (isWithinVarOfRandomFactor(randomFactor, firstVarId)
+                    && isWithinVarOfRandomFactor(randomFactor, secondVarId)) {
+                    Bs += ` ${getName(params, randomFactor)}_${interactionName} +`;
+                }
+            }
+            Bs = trimLastNCharacters(Bs) + ',\n';
+        }
+
+        return Bs;
+    }
+
+    function getDependentVarFormula(params) {
+        let formula = `      ${getDepVarName(params)} =`;
+        formula += ' B_intercept';
+
+        formula += applyToFixedFaxtors(
+                ff => `\n            + (B_${getName(params, ff)}*X_${getName(params, ff)})`,
+                params
+            ).join('');
+
+        for (let interactionId of getInteractionsIds(params)) {
+            interactionId = camelCaseToHyphens(interactionId);
+            let [firstVarId, secondVarId] = getVarIdsFromInteractionId(interactionId);
+            formula += `\n            + (B_${getName(params, interactionId)}*X_${getName(params, firstVarId)}*X_${getName(params, secondVarId)})`;
+        }
+
+        formula += `\n            + e_si`;
+        return formula;
+    }
+
+    function getSimulateTrialsSelectParams(params) {
+        let selectParams = '';
+        for (let randomFactor of getRandomFactors(params)) {
+            selectParams += `${getName(params, randomFactor)}_id, `;
+        }
+        selectParams += getFixedFactorsStringifyNameList(params) + ', ';
+        selectParams += applyToFixedFaxtors(ff => `X_${getName(params, ff)}, `, params).join('');
+        selectParams += getDepVarName(params);
+        return selectParams;
+    }
+
+    function getDataSimSummarise(params) {
+        let randomFactorsNs = applyToRandomFactors(
+            rf => `n_${getName(params, rf)
+                } = n_distinct(${
+                    getName(params, rf)
+                }_id),\n`,
+            params
+        ).join('');
+
+        let code = `dat_sim %>% group_by(${
+                getFixedFactorsStringifyNameList(params)
+            }) %>%\nsummarise(${
+                randomFactorsNs
+            }mean_${
+                getDepVarName(params)
+            } = mean(${
+                getDepVarName(params)
+            }))`;
+
+        return code;
+    }
+
+    function getLmerFormula(params) {
+        let formula = '';
+        if (isMaximalModelChecked(form)) {
+            formula += `${getDepVarName(params)} ~ 1 +`;
+            formula += ` ${applyToFixedFaxtors(ff => `X_${getName(params, ff)}`, params).join('*')} +`;
+            formula += applyToRandomFactors(
+                    rf => ` (1${
+                            hasWithinVars(rf)? ' + ' : ''
+                        }${
+                            getRandomFactorWithinVarsIds(params, rf)
+                                .map(ff => `X_${getName(params, ff)}`)
+                                .join('*')
+                        } | ${
+                            getName(params, rf)
+                        }_id) +`,
+                    params
+                ).join('');
+            formula = trimLastNCharacters(formula);
+        }
+        else {
+            formula = getUserModel(params);
+        }
+        return formula;
+    }
+
+    function getCode(params) {
+        let code = `
+library("lme4")        # model specification / estimation
+library("afex")        # deriving p-values from lmer
+library("broom.mixed") # extracting data from model fits 
+library("faux")        # data simulation
+library("tidyverse")   # data wrangling and visualisation
+
+# ensure this script returns the same results on each run
+set.seed(${getSeed(params)})
+faux_options(verbose = FALSE)
+
+sim_data <- function(
+${getNs(params)}
+    ${getBetas(params)}
+${getRandomFactorsParams(params)}
+    sigma      = ${getResidualSd(params)} # residual (error) sd
+) {
+
+  ${getSimulateRandomFactors(params)}
+
+  # simulate trials
+  crossing(
+    ${getSimulateTrialsCrossing(params)}
+  ) %>%
+    mutate(
+      # effect code the two fixed factors
+${getSimulateTrialsXs(params)}
+      # add together fixed and random effects for each effect
+${getSimulateTrialsBs(params)}
+      # generate the error term
+      e_si = rnorm(nrow(.), mean = 0, sd = sigma),
+      # calculate ${getDepVarName(params)} by adding each effect term 
+      # multiplied by the relevant effect-coded factor(s)
+${getDependentVarFormula(params)}
+    ) %>%
+    select(${getSimulateTrialsSelectParams(params)})
+}
+
+dat_sim <- sim_data()
+
+${getDataSimSummarise(params)}
+
+# set up the power function
+single_run <- function(filename = NULL, ...) {
+  dat_sim <- sim_data(...)
+  
+  mod_sim <- lmer(${getLmerFormula(params)},
+                  data = dat_sim)
+  
+  sim_results <- broom.mixed::tidy(mod_sim)
+  
+  # append the results to a file if filename is set
+  if (!is.null(filename)) {
+    append <- file.exists(filename) # append if the file exists
+    write_csv(sim_results, filename, append = append)
+  }
+  
+  # return the tidy table
+  sim_results
+}
+
+start_time <- Sys.time()
+single_run()
+
+end_time <- Sys.time()
+
+end_time - start_time
+
+filename <- "sims/ext_sims.csv" # change for new analyses
+if (!file.exists(filename)) {
+  # run simulations and save to a file
+  reps <- 20
+  sims <- purrr::map_df(1:reps, ~single_run(filename))
+}
+
+# read saved simulation data
+sims <- read_csv(filename, col_types = cols(
+  # makes sure plots display in this order
+  group = col_factor(ordered = TRUE),
+  term = col_factor(ordered = TRUE)
+))
+
+# calculate mean estimates and power for specified alpha
+alpha <- 0.05
+
+sims %>% 
+  filter(effect == "fixed") %>%
+  group_by(term) %>%
+  summarise(
+    mean_estimate = mean(estimate),
+    mean_se = mean(std.error),
+    power = mean(p.value < alpha),
+    .groups = "drop"
+  )
+
+
+sim_stats <- sims %>% 
+  filter(effect == "fixed") %>%
+  group_by(term) %>%
+  summarise(
+    value = mean(estimate),
+    .groups = "drop"
+  )
+
+sims %>%
+  filter(effect == "fixed") %>%
+  ggplot() +
+  geom_density(aes(estimate, y = ..count.., fill = term), 
+               alpha = 0.5, show.legend = FALSE) +
+  geom_vline(data = sim_stats, aes(xintercept = value), 
+             color = "grey40", show.legend = FALSE) +
+  facet_wrap(~term, ncol = 2, scales = "free_x") + 
+  theme_bw()
+
+
+sim_stats <- sims %>%
+  filter(effect == "ran_pars") %>%
+  group_by(group, term) %>%
+  summarise(value = mean(estimate),
+            .groups = "drop")
+
+sims %>%
+  filter(effect == "ran_pars") %>%
+  ggplot(aes(estimate, fill = group)) +
+  geom_density(alpha = 0.5, show.legend = FALSE) +
+  geom_vline(data = sim_stats, aes(xintercept = value),
+             show.legend = FALSE) +
+  facet_wrap(~group*term, ncol = 3, scales = "free") + 
+  theme_bw()
+
+`;
+        return code;
+    }
+
+
+    // Helper functions
+
+    function toCamelCase(s) {
+        return s.replace(/-([a-z])/g, (match, letter) => letter.toUpperCase());
+    }
+
+    function camelCaseToHyphens(s) {
+        return s.slice(0,1) + s.slice(1).replace(/([A-Z])/g, letter => '-' + letter.toLowerCase());
+    }
+
+
+    function getInteractionsObjsFromVarsIds(varsIds) {
+        let interactionsObjs = [];
+        for (let i = 0; i < varsIds.length; i++) {
+            let firstVarId = varsIds[i];
+            for (let j = i+1; j < varsIds.length; j++) {
+                let secondVarId = varsIds[j];
+                interactionsObjs.push({
+                    firstVarId,
+                    secondVarId,
+                    interactionVarId: firstVarId + interactionSign + secondVarId
+                });
+            }
+        }
+        return interactionsObjs;
+    }
+
+    function getInteractionsIdsFromVarsIds(varsIds) {
+        return getInteractionsObjsFromVarsIds(varsIds).map(interaction => interaction.interactionVarId);
+    }
+
+    function getInteractionId(varId1, varId2) {
+        return varId1 + interactionSign + varId2;
+    }
+
+    function isInteractionId(varId) {
+        return varId.includes(interactionSign);
+    }
+
+    function getVarIdsFromInteractionId(interactionId) {
+        return interactionId.split(interactionSign);
+    }
+
+
+    function trimLastNCharacters(s, n=2) {
+        return s.slice(0, -n);
+    }
+
+    function isString(val) {
+        return typeof val === 'string';
+    }
+
+
+    function safeGetFromInputValue(inputName) {
+        let input = form.elements[inputName];
+        let value = undefined;
+        if (input){
+            value = input.value;
+        }
+        return value;
+    }
+
+    function safeUpdateFromInputValue(obj, propertyName, inputId) {
+        let value = safeGetFromInputValue(inputId);
+        if (value) {
+            obj[propertyName] = value;
+        }
+    }
+
+    function safeSetInputValue(inputId, value) {
+        let input = form.elements[inputId];
+        if (input && (value || value === 0)) {
+            input.value = value;
+        }
+    }
+
+
+    function updateObj(obj, newData, exclude = []) {
+        for (let key of Object.keys(newData)) {
+            if (!exclude.includes(key)) {
+                obj[key] = newData[key];
+            }
+        }
+    }
+
+    function deleteOldValuesFromObject(obj, newKeys) {
+        for (let key of Object.keys(obj)) {
+            if (!newKeys.includes(key)) {
+                obj[key] = undefined;
+                delete obj[key];
+            }
+        }
+    }
+
+    function safeDeleteObjectProperty(obj, key) {
+        if (obj) {
+            obj[key] = undefined;
+            delete obj[key];
+        }
+    }
+
+    function isEmpty(obj) {
+        return Object.keys(obj).length === 0;
+    }
+
+
+    function download(filename, text) {
+        var element = document.createElement('a');
+        element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+        element.setAttribute('download', filename);
+
+        element.style.display = 'none';
+        document.body.appendChild(element);
+
+        element.click();
+
+        document.body.removeChild(element);
+    }
+
+
+    function log(value, message='') {
+        console.log(message, JSON.stringify(value, null, 2));
+    }
+
+})
+
+</script>
+
+</body>
+</html>
