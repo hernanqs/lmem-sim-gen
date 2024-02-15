@@ -7,7 +7,7 @@ However, notice that this project only generates the code for the most basic des
 
 Another limitation of the project is that it uses the letter 'x' as the internal symbol for interactions, so you should not name any variable as only 'x' (names like 'x1' are OK, but not the character 'x' alone). You should not use special characters (such as tildes, asterisks, plus or minus signs, etc.) in variable names, since they will be used as R variable names. Valid characters for R variable names are numbers (as long as their not in the first position), letters a to z in lower or upper case, underscores and dots.
 
-To use this project [click here](lmem-sim-gen.html).
+To use this project [click here](https://hernanqs.github.io/lmem-sim-gen/lmem-sim-gen.html).
 
 ## References
 DeBruine, L. M., & Barr, D. J. (2021). Understanding mixed-effects models through data simulation. Advances in Methods and Practices in Psychological Science, 4(1), 2515245920965119.
